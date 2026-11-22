@@ -29,6 +29,12 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="PX4 Log Analyzer", lifespan=lifespan)
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/", include_in_schema=False)
+
+def root():
+    return RedirectResponse("/docs")
 
 def get_db():
     """Dependency: one DB session per request, always closed afterwards."""

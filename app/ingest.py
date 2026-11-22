@@ -18,7 +18,7 @@ def sha256_of(path: Path) -> str:
     return h.hexdigest()
 
 
-def ingest(session: Session, path: str | Path) -> Flight:
+def ingest(session: Session, path: str | Path, original_name: str | None = None) -> Flight:
     path = Path(path).resolve()
     digest = sha256_of(path)
 
@@ -27,6 +27,8 @@ def ingest(session: Session, path: str | Path) -> Flight:
         return existing
 
     p = parse_ulog(path)
+    if original_name:               # uploads are stored as <sha>.ulg, keep the user's name
+        p.meta["filename"] = original_name
     flight = Flight(file_path=str(path), file_sha256=digest, **p.meta)
     flight.parameters = [
         Parameter(name=k, type="INT32" if isinstance(v, int) else "FLOAT", value=float(v))
