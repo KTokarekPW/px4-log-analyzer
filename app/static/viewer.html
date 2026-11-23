@@ -6,78 +6,76 @@
 <title>PX4 Flight Viewer</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #151b23; --panel2: #1c2430; --line: #2a3442;
-    --text: #d6dde6; --dim: #8592a3; --accent: #4fa3ff;
-    --err: #ff4d4f; --warn: #ffa940; --info: #6b8bb8; --ok: #52c41a;
-    --side: 330px; --bottom: 260px;
+    --bg: #1e1e1e; --panel: #252526; --row: #2a2a2b; --sel: #37373d; --line: #3c3c3c;
+    --text: #cccccc; --dim: #8b8b8b; --accent: #3794ff;
+    --err: #e5534b; --warn: #d29922; --info: #7d8590; --ok: #57ab5a;
+    --side: 340px; --bottom: 250px;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+    font: 12px/1.45 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
   #view { position: absolute; left: 0; top: 0; right: var(--side); bottom: var(--bottom); }
   #view canvas { display: block; }
-
-  #hud { position: absolute; left: 12px; top: 12px; background: rgba(13,17,23,.82);
-    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 220px;
-    font-variant-numeric: tabular-nums; pointer-events: none; }
-  #hud .row { display: flex; justify-content: space-between; gap: 16px; }
-  #hud .k { color: var(--dim); }
-  #hud .big { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-  #hud .sep { border-top: 1px solid var(--line); margin: 6px 0; }
-  #motors { display: flex; gap: 4px; align-items: flex-end; height: 34px; margin-top: 4px; }
-  #motors div { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
-  .bad { color: var(--err); } .warn { color: var(--warn); }
+  #overlay { position: absolute; left: 10px; top: 8px; font: 13px var(--mono); color: var(--text);
+    text-shadow: 0 1px 2px #000; pointer-events: none; }
 
   #side { position: absolute; top: 0; right: 0; width: var(--side); bottom: var(--bottom);
     background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
-  #side h3 { margin: 0; padding: 10px 12px 6px; font-size: 11px; letter-spacing: .08em;
-    text-transform: uppercase; color: var(--dim); font-weight: 600; }
-  .settings { padding: 0 12px 10px; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
-    align-items: center; border-bottom: 1px solid var(--line); }
-  .settings label { color: var(--dim); }
-  .settings input[type=range] { width: 130px; }
-  .settings .val { font-variant-numeric: tabular-nums; min-width: 34px; display: inline-block; text-align: right; }
-  .toggles { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 12px; }
-  .toggles label { color: var(--text); cursor: pointer; }
-  select, button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 6px; padding: 4px 8px; font: inherit; cursor: pointer; }
-  button:hover, select:hover { border-color: var(--accent); }
-  .legend { padding: 6px 12px 10px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 12px; }
-  .legend .bar { height: 8px; border-radius: 4px; margin: 4px 0 2px;
-    background: linear-gradient(90deg, #2fbf71, #e6c229, #ff4d4f); }
-  .legend .ends { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
-  .filters { display: flex; gap: 6px; padding: 0 12px 6px; }
-  .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line);
-    cursor: pointer; user-select: none; }
-  .chip.off { opacity: .35; }
-  #msgs { flex: 1; overflow-y: auto; padding: 0 6px 8px; }
-  .msg { display: grid; grid-template-columns: 54px 1fr; gap: 6px; padding: 4px 6px; border-radius: 4px;
-    cursor: pointer; border-left: 3px solid transparent; }
-  .msg:hover { background: var(--panel2); }
-  .msg .t { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
-  .msg.future { opacity: .4; }
-  .msg.current { background: var(--panel2); }
-  .msg.ERROR, .msg.CRITICAL, .msg.EMERGENCY, .msg.ALERT { border-left-color: var(--err); }
-  .msg.WARNING { border-left-color: var(--warn); }
-  .msg.INFO, .msg.NOTICE, .msg.DEBUG { border-left-color: var(--info); }
+  #side section { border-bottom: 1px solid var(--line); }
+  #side section.grow { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: 0; }
+  #side h3 { margin: 0; padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--text);
+    background: var(--row); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+  #side h3 .opts { font-weight: 400; color: var(--dim); display: flex; gap: 10px; }
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 10px; width: 48%; }
+  table.kv td { text-align: right; padding: 2px 10px; font: 12px var(--mono); }
+  #motors { display: inline-flex; gap: 3px; align-items: flex-end; height: 14px; width: 80px; vertical-align: middle; }
+  #motors div { flex: 1; background: var(--accent); min-height: 1px; }
+  .bad { color: var(--err); } .warn { color: var(--warn); } .ok { color: var(--ok); }
+
+  .form { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 6px 10px; }
+  .form label { color: var(--dim); }
+  .form input[type=range] { width: 120px; accent-color: var(--accent); vertical-align: middle; }
+  .form .val { font: 12px var(--mono); min-width: 28px; display: inline-block; text-align: right; }
+  .checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 14px; padding-top: 2px; }
+  .checks label, h3 label { color: var(--text); cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--accent); vertical-align: -2px; margin: 0 3px 0 0; }
+  select, button { background: var(--row); color: var(--text); border: 1px solid var(--line);
+    border-radius: 2px; padding: 2px 8px; font: inherit; cursor: pointer; height: 22px; }
+  button:hover, select:hover { background: var(--sel); }
+  .legend { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center;
+    color: var(--dim); font: 11px var(--mono); }
+  .legend .bar { height: 6px; background: linear-gradient(90deg, #57ab5a, #d29922, #e5534b); }
+  .note { grid-column: 1 / -1; color: var(--dim); font-size: 11px; }
+
+  #msgs { flex: 1; overflow-y: auto; font-size: 12px; }
+  .msg { display: grid; grid-template-columns: 52px 34px 1fr; gap: 6px; padding: 2px 10px; cursor: pointer; }
+  .msg:nth-child(even) { background: #27272800; }
+  .msg:hover { background: var(--row); }
+  .msg .t { color: var(--dim); font-family: var(--mono); text-align: right; }
+  .msg .lvl { font: 600 10px var(--mono); padding-top: 2px; }
+  .msg .lvl.err { color: var(--err); } .msg .lvl.warn { color: var(--warn); } .msg .lvl.info { color: var(--info); }
+  .msg.future { opacity: .45; }
+  .msg.current { background: var(--sel); }
 
   #bottom { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bottom);
     background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; }
-  #controls { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
-  #controls .time { font-variant-numeric: tabular-nums; min-width: 120px; }
+  #controls { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  #controls .time { font: 12px var(--mono); min-width: 130px; margin-left: 6px; }
   #controls .spacer { flex: 1; }
   #controls .hint { color: var(--dim); font-size: 11px; }
   #tl, #chart { display: block; width: 100%; cursor: crosshair; }
   #tl { height: 46px; flex: none; }
   #chartwrap { flex: 1; position: relative; min-height: 0; }
   #chart { position: absolute; inset: 0; height: 100%; }
-  #tip { position: fixed; pointer-events: none; background: #000d; border: 1px solid var(--line);
-    padding: 6px 8px; border-radius: 6px; font-size: 12px; max-width: 420px; display: none; z-index: 10; }
+  #tip { position: fixed; pointer-events: none; background: #252526; border: 1px solid var(--line);
+    padding: 4px 8px; font-size: 12px; max-width: 420px; display: none; z-index: 10; box-shadow: 0 2px 6px #0008; }
 
   #loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: var(--bg); z-index: 20; }
-  #loader .box { border: 2px dashed var(--line); border-radius: 12px; padding: 40px 50px; text-align: center; max-width: 520px; }
-  #loader code { background: var(--panel2); padding: 2px 6px; border-radius: 4px; }
+  #loader .box { border: 1px dashed var(--line); padding: 30px 40px; text-align: center; max-width: 520px; }
+  #loader code { background: var(--row); padding: 1px 5px; font-family: var(--mono); }
   #loader.drag .box { border-color: var(--accent); }
   #loader .err { color: var(--err); margin-top: 12px; white-space: pre-wrap; }
 </style>
@@ -88,54 +86,54 @@
 </script>
 </head>
 <body>
-<div id="view"></div>
-
-<div id="hud">
-  <div class="big" id="h-time">0.00 s</div>
-  <div class="row"><span class="k">mode</span><span id="h-mode">-</span></div>
-  <div class="row"><span class="k">armed</span><span id="h-armed">-</span></div>
-  <div class="sep"></div>
-  <div class="row"><span class="k">alt (rel. ground)</span><span id="h-alt">-</span></div>
-  <div class="row"><span class="k">h-speed</span><span id="h-hs">-</span></div>
-  <div class="row"><span class="k">v-speed (up)</span><span id="h-vs">-</span></div>
-  <div class="sep"></div>
-  <div class="row"><span class="k">σ N / E / D</span><span id="h-spos">-</span></div>
-  <div class="row"><span class="k">σ yaw</span><span id="h-syaw">-</span></div>
-  <div class="row"><span class="k">mag test ratio</span><span id="h-mag">-</span></div>
-  <div class="row"><span class="k">battery</span><span id="h-bat">-</span></div>
-  <div id="motors"></div>
-</div>
+<div id="view"><div id="overlay"><span id="h-time">0.00 s</span></div></div>
 
 <aside id="side">
-  <h3>Display</h3>
-  <div class="settings">
-    <label for="sig">uncertainty bound</label>
-    <select id="sig"><option value="1">1σ (68%)</option><option value="2">2σ (95%)</option><option value="3" selected>3σ (99.7%)</option></select>
-    <label for="exag">size exaggeration</label>
-    <span><input id="exag" type="range" min="1" max="30" step="1" value="4"><span class="val" id="exag-v">×4</span></span>
-    <label for="msc">drone model scale</label>
-    <span><input id="msc" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="msc-v">×3</span></span>
-    <div class="toggles">
-      <label><input type="checkbox" id="t-ell" checked> ellipsoid</label>
-      <label><input type="checkbox" id="t-rings" checked> σ rings</label>
-      <label><input type="checkbox" id="t-yaw" checked> yaw cone</label>
-      <label><input type="checkbox" id="t-path" checked> path</label>
-      <label><input type="checkbox" id="t-follow" checked> follow</label>
+  <section>
+    <h3>Telemetry</h3>
+    <table class="kv">
+      <tr><th>mode</th><td id="h-mode">-</td></tr>
+      <tr><th>armed</th><td id="h-armed">-</td></tr>
+      <tr><th>altitude (rel. ground)</th><td id="h-alt">-</td></tr>
+      <tr><th>horizontal speed</th><td id="h-hs">-</td></tr>
+      <tr><th>vertical speed (up)</th><td id="h-vs">-</td></tr>
+      <tr><th>σ N / E / D</th><td id="h-spos">-</td></tr>
+      <tr><th>σ yaw</th><td id="h-syaw">-</td></tr>
+      <tr><th>mag test ratio</th><td id="h-mag">-</td></tr>
+      <tr><th>battery</th><td id="h-bat">-</td></tr>
+      <tr><th>motors</th><td><div id="motors"></div></td></tr>
+    </table>
+  </section>
+  <section>
+    <h3>Display</h3>
+    <div class="form">
+      <label for="sig">uncertainty bound</label>
+      <select id="sig"><option value="1">1σ (68%)</option><option value="2">2σ (95%)</option><option value="3" selected>3σ (99.7%)</option></select>
+      <label for="exag">size exaggeration</label>
+      <span><input id="exag" type="range" min="1" max="30" step="1" value="4"><span class="val" id="exag-v">×4</span></span>
+      <label for="msc">model scale</label>
+      <span><input id="msc" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="msc-v">×3</span></span>
+      <div class="checks">
+        <label><input type="checkbox" id="t-ell" checked>ellipsoid</label>
+        <label><input type="checkbox" id="t-rings" checked>σ rings</label>
+        <label><input type="checkbox" id="t-yaw" checked>yaw cone</label>
+        <label><input type="checkbox" id="t-path" checked>path</label>
+        <label><input type="checkbox" id="t-follow" checked>follow</label>
+      </div>
+      <div class="legend"><span id="lg-min">-</span><div class="bar"></div><span id="lg-max">-</span></div>
+      <div class="note">Ring colour: horizontal σ relative to this flight. Sizes = σ × bound × exaggeration; yaw cone = ±bound·σ<sub>yaw</sub>, not exaggerated.</div>
     </div>
-  </div>
-  <div class="legend">
-    Ring colour: horizontal σ relative to this flight
-    <div class="bar"></div>
-    <div class="ends"><span id="lg-min">-</span><span id="lg-max">-</span></div>
-    Sizes = σ × bound × exaggeration. Yaw cone = ±bound·σ<sub>yaw</sub> (not exaggerated).
-  </div>
-  <h3>Messages</h3>
-  <div class="filters">
-    <span class="chip" data-lvl="err" style="color:var(--err)">errors</span>
-    <span class="chip" data-lvl="warn" style="color:var(--warn)">warnings</span>
-    <span class="chip" data-lvl="info" style="color:var(--info)">info</span>
-  </div>
-  <div id="msgs"></div>
+  </section>
+  <section class="grow">
+    <h3>Messages
+      <span class="opts">
+        <label><input type="checkbox" data-lvl="err" checked>errors</label>
+        <label><input type="checkbox" data-lvl="warn" checked>warnings</label>
+        <label><input type="checkbox" data-lvl="info" checked>info</label>
+      </span>
+    </h3>
+    <div id="msgs"></div>
+  </section>
 </aside>
 
 <div id="bottom">
@@ -145,7 +143,7 @@
       <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option>
       <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
     </select>
-    <button id="prev" title="[">⏮ msg</button><button id="next" title="]">msg ⏭</button>
+    <button id="prev" title="[">◀ msg</button><button id="next" title="]">msg ▶</button>
     <span class="time" id="c-time">0.00 / 0.00 s</span>
     <span class="spacer"></span>
     <span class="hint">Space play · ←/→ 1 s (Shift 5 s) · [ ] prev/next message · F follow</span>
@@ -157,9 +155,9 @@
 
 <div id="loader">
   <div class="box">
-    <h2 style="margin-top:0">PX4 Flight Viewer</h2>
+    <h2 style="margin-top:0;font-weight:600">PX4 Flight Viewer</h2>
     <p>Open via the API: <code>/viewer/&lt;flight_id&gt;</code><br>
-       or drop a JSON from <code>python -m app.viz log.ulg -o viz.json</code></p>
+       or load a JSON from <code>python -m app.viz log.ulg -o viz.json</code></p>
     <input type="file" id="file" accept=".json">
     <div class="err" id="load-err"></div>
   </div>
@@ -175,7 +173,9 @@ const F = (a) => Float64Array.from(a ?? [], (v) => (v == null ? NaN : v));
 const fmt = (v, d = 2, unit = "") => (Number.isFinite(v) ? v.toFixed(d) + unit : "-");
 const LEVEL_CLASS = (l) => ["ERROR", "CRITICAL", "EMERGENCY", "ALERT"].includes(l) ? "err"
   : l === "WARNING" ? "warn" : "info";
-const LEVEL_COLOR = { err: "#ff4d4f", warn: "#ffa940", info: "#6b8bb8" };
+const LEVEL_COLOR = { err: "#e5534b", warn: "#d29922", info: "#7d8590" };
+const LEVEL_ABBR = { err: "ERR", warn: "WRN", info: "INF" };
+const C = { lane: "#2a2a2b", grid: "#3c3c3c", dim: "#8b8b8b", text: "#cccccc", head: "#e0e0e0" };
 
 function bsearch(T, t) {           // last i with T[i] <= t
   let lo = 0, hi = T.length - 1;
@@ -196,7 +196,7 @@ function interp(T, V, t) {
   return v0 + (v1 - v0) * a;
 }
 function ramp(x) {                 // 0..1 -> green, yellow, red
-  const c0 = new THREE.Color("#2fbf71"), c1 = new THREE.Color("#e6c229"), c2 = new THREE.Color("#ff4d4f");
+  const c0 = new THREE.Color("#57ab5a"), c1 = new THREE.Color("#d29922"), c2 = new THREE.Color("#e5534b");
   x = Math.min(1, Math.max(0, x));
   return x < 0.5 ? c0.lerp(c1, x * 2) : c1.lerp(c2, (x - 0.5) * 2);
 }
@@ -264,11 +264,11 @@ function start(raw) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   view.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color("#0d1117");
+  scene.background = new THREE.Color("#1e1e1e");
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 5000);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x202530, 1.2));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 1.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(30, 60, 20); scene.add(sun);
 
   // trajectory in three coords
@@ -280,34 +280,34 @@ function start(raw) {
 
   // ground grid + compass labels
   const extent = Math.max(20, Math.ceil(Math.max(size.x, size.z) * 1.6 / 10) * 10);
-  const grid = new THREE.GridHelper(extent, extent <= 80 ? extent : extent / 5, 0x3a4658, 0x232b36);
+  const grid = new THREE.GridHelper(extent, extent <= 80 ? extent : extent / 5, 0x555555, 0x333333);
   grid.position.set(center.x, groundY, center.z); scene.add(grid);
-  function label(text, color = "#8592a3", px = 64) {
+  function label(text, color = "#8b8b8b", px = 56) {
     const c = document.createElement("canvas"); c.width = c.height = 128;
-    const g = c.getContext("2d"); g.fillStyle = color; g.font = `bold ${px}px system-ui`;
+    const g = c.getContext("2d"); g.fillStyle = color; g.font = `600 ${px}px "Segoe UI", system-ui`;
     g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, 64, 64);
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false }));
     s.scale.setScalar(extent * 0.06); return s;
   }
-  [["N", 0, -1, "#ff6b6b"], ["E", 1, 0, "#8592a3"], ["S", 0, 1, "#8592a3"], ["W", -1, 0, "#8592a3"]]
+  [["N", 0, -1, "#e5534b"], ["E", 1, 0, "#8b8b8b"], ["S", 0, 1, "#8b8b8b"], ["W", -1, 0, "#8b8b8b"]]
     .forEach(([t, x, z, c]) => { const s = label(t, c); s.position.set(center.x + x * extent * 0.55, groundY + 0.5, center.z + z * extent * 0.55); scene.add(s); });
   // takeoff marker
-  const home = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: 0x4fa3ff, side: THREE.DoubleSide }));
+  const home = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: 0x3794ff, side: THREE.DoubleSide }));
   home.rotation.x = -Math.PI / 2; home.position.set(pts[0].x, groundY + 0.01, pts[0].z); scene.add(home);
 
   // full path (dim), flown path (bright), ground shadow
   const mkLine = (points, color, opacity = 1) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
     new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity }));
-  const pathAll = mkLine(pts, 0x56637a, 0.45);
-  const pathDone = mkLine(pts, 0x4fa3ff);
+  const pathAll = mkLine(pts, 0x6a6a6a, 0.5);
+  const pathDone = mkLine(pts, 0x3794ff);
   const shadow = mkLine(pts.map((p) => new THREE.Vector3(p.x, groundY + 0.02, p.z)), 0x000000, 0.5);
   scene.add(pathAll, pathDone, shadow);
-  const dropLine = mkLine([new THREE.Vector3(), new THREE.Vector3()], 0x8592a3, 0.5); scene.add(dropLine);
+  const dropLine = mkLine([new THREE.Vector3(), new THREE.Vector3()], 0x8b8b8b, 0.5); scene.add(dropLine);
 
   // ---- quad model, authored in body FRD coordinates (x fwd, y right, z down)
   const drone = new THREE.Group(); scene.add(drone);
   const body = new THREE.Group(); drone.add(body);          // scaled by model scale
-  const matBody = new THREE.MeshStandardMaterial({ color: 0x2b3440, metalness: 0.3, roughness: 0.6 });
+  const matBody = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.2, roughness: 0.7 });
   body.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.05), matBody));
   const rot = raw.rotors?.length ? raw.rotors : [{ px: 1, py: 1, km: .05 }, { px: -1, py: -1, km: .05 }, { px: 1, py: -1, km: -.05 }, { px: -1, py: 1, km: -.05 }];
   const rmax = Math.max(...rot.map((r) => Math.hypot(r.px, r.py))) || 1;
@@ -316,29 +316,29 @@ function start(raw) {
     const px = r.px / rmax * ARM, py = r.py / rmax * ARM;
     const front = px > 0;
     const arm = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(px, py), 0.02, 0.015),
-      new THREE.MeshStandardMaterial({ color: front ? 0xd64545 : 0x9aa5b4 }));
+      new THREE.MeshStandardMaterial({ color: front ? 0xc94a43 : 0xa0a0a0 }));
     arm.position.set(px / 2, py / 2, -0.01); arm.rotation.z = Math.atan2(py, px); body.add(arm);
     const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 16), matBody);
     motor.rotation.x = Math.PI / 2; motor.position.set(px, py, -0.025); body.add(motor);
     const disc = new THREE.Mesh(new THREE.CircleGeometry(0.1, 32),
-      new THREE.MeshBasicMaterial({ color: r.km > 0 ? 0x4fa3ff : 0x52c41a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: r.km > 0 ? 0x3794ff : 0x57ab5a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
     disc.position.set(px, py, -0.045); body.add(disc);
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.016, 0.004), new THREE.MeshStandardMaterial({ color: 0xdde3ea }));
     blade.position.set(px, py, -0.046); body.add(blade);
     return { disc, blade, dir: Math.sign(r.km) || 1, idx: i };
   });
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 16), new THREE.MeshStandardMaterial({ color: 0xff4d4f }));
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 16), new THREE.MeshStandardMaterial({ color: 0xe5534b }));
   nose.rotation.z = -Math.PI / 2; nose.position.set(0.12, 0, 0); body.add(nose);
 
   // ---- uncertainty visuals (world aligned, NOT rotated with the drone)
   const ell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16),
-    new THREE.MeshBasicMaterial({ color: 0x4fa3ff, transparent: true, opacity: 0.14, depthWrite: false }));
+    new THREE.MeshBasicMaterial({ color: 0x3794ff, transparent: true, opacity: 0.12, depthWrite: false }));
   const ellWire = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 8)),
-    new THREE.LineBasicMaterial({ color: 0x4fa3ff, transparent: true, opacity: 0.25 }));
+    new THREE.LineBasicMaterial({ color: 0x3794ff, transparent: true, opacity: 0.2 }));
   ell.add(ellWire); scene.add(ell);
   const circleGeo = new THREE.BufferGeometry().setFromPoints(
     Array.from({ length: 65 }, (_, i) => { const a = i / 64 * Math.PI * 2; return new THREE.Vector3(Math.cos(a), 0, Math.sin(a)); }));
-  const ringNow = new THREE.Line(circleGeo, new THREE.LineBasicMaterial({ color: 0xffffff })); scene.add(ringNow);
+  const ringNow = new THREE.Line(circleGeo, new THREE.LineBasicMaterial({ color: 0xe0e0e0 })); scene.add(ringNow);
   // trail of rings, one per EKF sample
   const rings = Array.from(E.t, (te, i) => {
     const p = ned2three(interp(P.t, P.n, te), interp(P.t, P.e, te), interp(P.t, P.d, te));
@@ -350,7 +350,7 @@ function start(raw) {
   const WEDGE_N = 24;
   const wedgeGeo = new THREE.BufferGeometry();
   wedgeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(WEDGE_N * 9), 3));
-  const wedge = new THREE.Mesh(wedgeGeo, new THREE.MeshBasicMaterial({ color: 0xffa940, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  const wedge = new THREE.Mesh(wedgeGeo, new THREE.MeshBasicMaterial({ color: 0xd29922, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
   scene.add(wedge);
 
   // ---- camera framing
@@ -437,10 +437,10 @@ function start(raw) {
   }
 
   function updateHud(s) {
-    $("h-time").textContent = `${state.t.toFixed(2)} s`;
+    $("h-time").textContent = `t = ${state.t.toFixed(2)} s`;
     $("c-time").textContent = `${state.t.toFixed(2)} / ${tMax.toFixed(2)} s`;
     $("h-mode").textContent = s.mode;
-    $("h-armed").innerHTML = s.armed ? '<span style="color:var(--ok)">ARMED</span>' : "disarmed";
+    $("h-armed").textContent = s.armed ? "yes" : "no"; $("h-armed").className = s.armed ? "ok" : "";
     $("h-alt").textContent = fmt(groundD - s.d, 1, " m");
     $("h-hs").textContent = fmt(Math.hypot(s.vn, s.ve), 1, " m/s");
     $("h-vs").textContent = fmt(-s.vd, 1, " m/s");
@@ -455,8 +455,9 @@ function start(raw) {
   // ---- message list
   const msgEls = msgs.map((m) => {
     const el = document.createElement("div");
-    el.className = `msg ${m.level}`;
-    el.innerHTML = `<span class="t">${m.t.toFixed(2)}</span><span></span>`;
+    const cls = LEVEL_CLASS(m.level);
+    el.className = "msg";
+    el.innerHTML = `<span class="t">${m.t.toFixed(2)}</span><span class="lvl ${cls}">${LEVEL_ABBR[cls]}</span><span></span>`;
     el.lastChild.textContent = m.text;
     el.onclick = () => seek(m.t - 1);
     $("msgs").appendChild(el); return el;
@@ -476,9 +477,8 @@ function start(raw) {
       lastCurrent = cur;
     }
   }
-  document.querySelectorAll(".chip").forEach((c) => c.onclick = () => {
-    state.filters[c.dataset.lvl] = !state.filters[c.dataset.lvl];
-    c.classList.toggle("off", !state.filters[c.dataset.lvl]); applyTime();
+  document.querySelectorAll("input[data-lvl]").forEach((c) => c.onchange = () => {
+    state.filters[c.dataset.lvl] = c.checked; applyTime();
   });
 
   // ---- timeline + chart (2D canvas, shared time axis)
@@ -494,22 +494,22 @@ function start(raw) {
     const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
     return [g, r.width, r.height];
   }
-  const modeColor = (name) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 45% 35%)`; };
+  const modeColor = (name) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 22% 32%)`; };
   const visMsgs = () => msgs.filter((m) => state.filters[LEVEL_CLASS(m.level)]);
 
   function drawTimeline() {
     const [g, w, h] = fitCanvas(tl);
     g.clearRect(0, 0, w, h);
-    g.fillStyle = "#8592a3"; g.font = "11px system-ui"; g.textBaseline = "middle";
+    g.fillStyle = C.dim; g.font = "11px 'Segoe UI', system-ui"; g.textBaseline = "middle";
     g.fillText("mode", 10, 9); g.fillText("armed", 10, 22); g.fillText("messages", 10, 36);
     modes.forEach((m) => {                       // mode bands
       const x0 = xOf(m.t0, w), x1 = xOf(m.t1, w);
       g.fillStyle = modeColor(m.value); g.fillRect(x0, 2, x1 - x0, 14);
-      g.fillStyle = "#e8edf3"; g.save(); g.beginPath(); g.rect(x0, 2, x1 - x0, 14); g.clip();
+      g.fillStyle = C.head; g.save(); g.beginPath(); g.rect(x0, 2, x1 - x0, 14); g.clip();
       g.fillText(m.value, x0 + 4, 9); g.restore();
     });
-    armed.forEach((a) => { g.fillStyle = "#52c41a"; g.fillRect(xOf(a.t0, w), 19, xOf(a.t1, w) - xOf(a.t0, w), 6); });
-    g.fillStyle = "#1c2430"; g.fillRect(PAD_L, 28, w - PAD_L - PAD_R, h - 30);
+    armed.forEach((a) => { g.fillStyle = "#3f7a45"; g.fillRect(xOf(a.t0, w), 19, xOf(a.t1, w) - xOf(a.t0, w), 6); });
+    g.fillStyle = C.grid; g.fillRect(PAD_L, h - 1, w - PAD_L - PAD_R, 1);
     for (const lvl of ["info", "warn", "err"])  // draw errors last so they stay on top
       visMsgs().filter((m) => LEVEL_CLASS(m.level) === lvl).forEach((m) => {
         g.fillStyle = LEVEL_COLOR[lvl];
@@ -520,9 +520,9 @@ function start(raw) {
   }
 
   const lanes = [
-    { name: "σ pos [m]", series: [{ T: E.t, V: Float64Array.from(sH), c: "#4fa3ff", lbl: "σ_h" }, { T: E.t, V: E.sd, c: "#b37feb", lbl: "σ_v" }] },
-    { name: "σ yaw [°]", series: [{ T: E.t, V: E.syaw, c: "#ffa940", lbl: "σ_yaw" }] },
-    { name: "test ratio", ref: 1, series: R ? [{ T: R.t, V: R.mag, c: "#ff4d4f", lbl: "mag" }, { T: R.t, V: R.gps, c: "#52c41a", lbl: "gps" }, { T: R.t, V: R.baro, c: "#8592a3", lbl: "baro" }] : [], clip: 3 },
+    { name: "σ pos [m]", series: [{ T: E.t, V: Float64Array.from(sH), c: "#3794ff", lbl: "σ_h" }, { T: E.t, V: E.sd, c: "#a371f7", lbl: "σ_v" }] },
+    { name: "σ yaw [°]", series: [{ T: E.t, V: E.syaw, c: "#d29922", lbl: "σ_yaw" }] },
+    { name: "test ratio", ref: 1, series: R ? [{ T: R.t, V: R.mag, c: "#e5534b", lbl: "mag" }, { T: R.t, V: R.gps, c: "#57ab5a", lbl: "gps" }, { T: R.t, V: R.baro, c: "#8b8b8b", lbl: "baro" }] : [], clip: 3 },
   ];
   lanes.forEach((L) => {
     const all = L.series.flatMap((s) => Array.from(s.V).filter(Number.isFinite));
@@ -536,11 +536,11 @@ function start(raw) {
     lanes.forEach((L, li) => {
       const y0 = li * lh + 2, y1 = y0 + lh - 4;
       const yOf = (v) => y1 - (Math.min(v, L.max) - L.min) / (L.max - L.min) * (y1 - y0);
-      g.fillStyle = "#1c2430"; g.fillRect(PAD_L, y0, w - PAD_L - PAD_R, y1 - y0);
-      g.fillStyle = "#8592a3"; g.font = "11px system-ui"; g.textBaseline = "top";
+      g.fillStyle = C.grid; g.fillRect(PAD_L, y1, w - PAD_L - PAD_R, 1); g.fillRect(PAD_L, y0, 1, y1 - y0);
+      g.fillStyle = C.dim; g.font = "11px 'Segoe UI', system-ui"; g.textBaseline = "top";
       g.fillText(L.name, 10, y0 + 2);
       if (L.ref != null) {                     // rejection threshold
-        g.strokeStyle = "#ff4d4f88"; g.setLineDash([4, 4]); g.beginPath();
+        g.strokeStyle = "#e5534b77"; g.setLineDash([4, 4]); g.beginPath();
         g.moveTo(PAD_L, yOf(L.ref)); g.lineTo(w - PAD_R, yOf(L.ref)); g.stroke(); g.setLineDash([]);
       }
       L.series.forEach((s, si) => {
@@ -564,12 +564,12 @@ function start(raw) {
   }
   function drawAxisAndHead(g, w, h, ticks) {
     if (ticks) {
-      g.fillStyle = "#8592a3"; g.font = "10px system-ui"; g.textBaseline = "bottom";
+      g.fillStyle = C.dim; g.font = "10px 'Segoe UI', system-ui"; g.textBaseline = "bottom";
       const step = [1, 2, 5, 10, 20, 30, 60, 120, 300].find((s) => (tMax - tMin) / s <= 14) ?? 600;
       for (let t = Math.ceil(tMin / step) * step; t <= tMax; t += step) g.fillText(`${t}s`, xOf(t, w) - 6, h - 1);
     }
     const x = xOf(state.t, w);
-    g.fillStyle = "#ffffff"; g.fillRect(x - 1, 0, 2, ticks ? h - 14 : h);
+    g.fillStyle = C.head; g.fillRect(x - 0.5, 0, 1.5, ticks ? h - 14 : h);
   }
 
   // scrubbing + hover tooltips
