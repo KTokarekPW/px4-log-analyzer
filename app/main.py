@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, UploadFile
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pyulog import ULog
 from pyulog.core import ULogException
 from sqlalchemy import func, select
@@ -15,6 +17,7 @@ from app.ingest import ingest
 from app.models import Flight, LogMessage, Parameter, Topic
 from app.schemas import (FlightDetail, FlightSummary, MessageOut, ParameterOut,
                          TopicData, TopicOut)
+from app.viz import build_viz
 
 UPLOAD_DIR = Path("logs/uploads")
 MAX_UPLOAD_MB = 200
@@ -28,13 +31,13 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="PX4 Log Analyzer", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
-from fastapi.responses import RedirectResponse
 
 @app.get("/", include_in_schema=False)
-
 def root():
     return RedirectResponse("/docs")
+
 
 def get_db():
     """Dependency: one DB session per request, always closed afterwards."""
@@ -64,7 +67,7 @@ def upload_flight(file: UploadFile, response: Response, db: Session = Depends(ge
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalar(select(Flight).where(Flight.file_sha256 == digest))
     if existing:
-        response.status_code = 200          # already have it: 200 instead of 201 Created
+        response.status_code = 200          #Already have it: 200 instead of 201 Created
         return existing
 
     path = UPLOAD_DIR / f"{digest}.ulg"
@@ -95,7 +98,7 @@ def flight_detail(flight: Flight = Depends(get_flight), db: Session = Depends(ge
 
     columns = {c.name: getattr(flight, c.name) for c in Flight.__table__.columns}
     return FlightDetail(
-        **columns,                  # extra keys (file_path, sha) are ignored by Pydantic
+        **columns,                  #Extra keys (file_path, sha) are ignored by Pydantic
         n_params=count(Parameter),
         n_messages=count(LogMessage),
         n_errors=count(LogMessage, LogMessage.level.in_(["ERROR", "CRITICAL"])),
@@ -105,13 +108,13 @@ def flight_detail(flight: Flight = Depends(get_flight), db: Session = Depends(ge
 @app.delete("/flights/{flight_id}", status_code=204)
 def delete_flight(flight: Flight = Depends(get_flight), db: Session = Depends(get_db)):
     path = Path(flight.file_path)
-    db.delete(flight)               # cascade removes params/messages/topics
+    db.delete(flight)               #Cascade removes params/messages/topics
     db.commit()
-    if path.parent.resolve() == UPLOAD_DIR.resolve():   # never delete files we didn't upload
+    if path.parent.resolve() == UPLOAD_DIR.resolve():   #Never delete files we didn't upload
         path.unlink(missing_ok=True)
 
 
-# ---------- children of a flight ----------
+#Flight children
 
 @app.get("/flights/{flight_id}/params", response_model=list[ParameterOut])
 def flight_params(
@@ -152,7 +155,6 @@ def topic_data(
     fields: str | None = Query(None, description="Comma separated, e.g. q[0],q[1]. Empty = all"),
     max_points: int = Query(2000, ge=10, le=100_000),
 ):
-    """Time series are not in the DB: read just this topic from the .ulg on demand."""
     known = db.scalar(select(Topic).where(
         Topic.flight_id == flight.id, Topic.name == topic_name, Topic.multi_id == multi_id))
     if known is None:
@@ -178,3 +180,19 @@ def topic_data(
         name=topic_name, multi_id=multi_id, total_rows=n, step=step, fields=wanted,
         data={"t_s": t_s.tolist(), **{f: to_json(data[f]) for f in wanted}},
     )
+
+
+#3D viewer
+
+@app.get("/flights/{flight_id}/viz")
+def flight_viz(flight: Flight = Depends(get_flight)):
+    #Everything the viewer needs built from ulog on demand
+    try:
+        return build_viz(flight.file_path)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/viewer/{flight_id}", include_in_schema=False)
+def viewer(flight: Flight = Depends(get_flight)):
+    return RedirectResponse(f"/static/viewer.html?flight={flight.id}")
