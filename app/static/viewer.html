@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PX4 Flight Viewer</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #151b23; --panel2: #1c2430; --line: #2a3442;
+    --text: #d6dde6; --dim: #8592a3; --accent: #4fa3ff;
+    --err: #ff4d4f; --warn: #ffa940; --info: #6b8bb8; --ok: #52c41a;
+    --side: 330px; --bottom: 260px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #view { position: absolute; left: 0; top: 0; right: var(--side); bottom: var(--bottom); }
+  #view canvas { display: block; }
+
+  #hud { position: absolute; left: 12px; top: 12px; background: rgba(13,17,23,.82);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 220px;
+    font-variant-numeric: tabular-nums; pointer-events: none; }
+  #hud .row { display: flex; justify-content: space-between; gap: 16px; }
+  #hud .k { color: var(--dim); }
+  #hud .big { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  #hud .sep { border-top: 1px solid var(--line); margin: 6px 0; }
+  #motors { display: flex; gap: 4px; align-items: flex-end; height: 34px; margin-top: 4px; }
+  #motors div { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
+  .bad { color: var(--err); } .warn { color: var(--warn); }
+
+  #side { position: absolute; top: 0; right: 0; width: var(--side); bottom: var(--bottom);
+    background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+  #side h3 { margin: 0; padding: 10px 12px 6px; font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .settings { padding: 0 12px 10px; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
+    align-items: center; border-bottom: 1px solid var(--line); }
+  .settings label { color: var(--dim); }
+  .settings input[type=range] { width: 130px; }
+  .settings .val { font-variant-numeric: tabular-nums; min-width: 34px; display: inline-block; text-align: right; }
+  .toggles { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 12px; }
+  .toggles label { color: var(--text); cursor: pointer; }
+  select, button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 8px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  .legend { padding: 6px 12px 10px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 12px; }
+  .legend .bar { height: 8px; border-radius: 4px; margin: 4px 0 2px;
+    background: linear-gradient(90deg, #2fbf71, #e6c229, #ff4d4f); }
+  .legend .ends { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .filters { display: flex; gap: 6px; padding: 0 12px 6px; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line);
+    cursor: pointer; user-select: none; }
+  .chip.off { opacity: .35; }
+  #msgs { flex: 1; overflow-y: auto; padding: 0 6px 8px; }
+  .msg { display: grid; grid-template-columns: 54px 1fr; gap: 6px; padding: 4px 6px; border-radius: 4px;
+    cursor: pointer; border-left: 3px solid transparent; }
+  .msg:hover { background: var(--panel2); }
+  .msg .t { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
+  .msg.future { opacity: .4; }
+  .msg.current { background: var(--panel2); }
+  .msg.ERROR, .msg.CRITICAL, .msg.EMERGENCY, .msg.ALERT { border-left-color: var(--err); }
+  .msg.WARNING { border-left-color: var(--warn); }
+  .msg.INFO, .msg.NOTICE, .msg.DEBUG { border-left-color: var(--info); }
+
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bottom);
+    background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; }
+  #controls { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+  #controls .time { font-variant-numeric: tabular-nums; min-width: 120px; }
+  #controls .spacer { flex: 1; }
+  #controls .hint { color: var(--dim); font-size: 11px; }
+  #tl, #chart { display: block; width: 100%; cursor: crosshair; }
+  #tl { height: 46px; flex: none; }
+  #chartwrap { flex: 1; position: relative; min-height: 0; }
+  #chart { position: absolute; inset: 0; height: 100%; }
+  #tip { position: fixed; pointer-events: none; background: #000d; border: 1px solid var(--line);
+    padding: 6px 8px; border-radius: 6px; font-size: 12px; max-width: 420px; display: none; z-index: 10; }
+
+  #loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); z-index: 20; }
+  #loader .box { border: 2px dashed var(--line); border-radius: 12px; padding: 40px 50px; text-align: center; max-width: 520px; }
+  #loader code { background: var(--panel2); padding: 2px 6px; border-radius: 4px; }
+  #loader.drag .box { border-color: var(--accent); }
+  #loader .err { color: var(--err); margin-top: 12px; white-space: pre-wrap; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="view"></div>
+
+<div id="hud">
+  <div class="big" id="h-time">0.00 s</div>
+  <div class="row"><span class="k">mode</span><span id="h-mode">-</span></div>
+  <div class="row"><span class="k">armed</span><span id="h-armed">-</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="k">alt (rel. ground)</span><span id="h-alt">-</span></div>
+  <div class="row"><span class="k">h-speed</span><span id="h-hs">-</span></div>
+  <div class="row"><span class="k">v-speed (up)</span><span id="h-vs">-</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="k">σ N / E / D</span><span id="h-spos">-</span></div>
+  <div class="row"><span class="k">σ yaw</span><span id="h-syaw">-</span></div>
+  <div class="row"><span class="k">mag test ratio</span><span id="h-mag">-</span></div>
+  <div class="row"><span class="k">battery</span><span id="h-bat">-</span></div>
+  <div id="motors"></div>
+</div>
+
+<aside id="side">
+  <h3>Display</h3>
+  <div class="settings">
+    <label for="sig">uncertainty bound</label>
+    <select id="sig"><option value="1">1σ (68%)</option><option value="2">2σ (95%)</option><option value="3" selected>3σ (99.7%)</option></select>
+    <label for="exag">size exaggeration</label>
+    <span><input id="exag" type="range" min="1" max="30" step="1" value="4"><span class="val" id="exag-v">×4</span></span>
+    <label for="msc">drone model scale</label>
+    <span><input id="msc" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="msc-v">×3</span></span>
+    <div class="toggles">
+      <label><input type="checkbox" id="t-ell" checked> ellipsoid</label>
+      <label><input type="checkbox" id="t-rings" checked> σ rings</label>
+      <label><input type="checkbox" id="t-yaw" checked> yaw cone</label>
+      <label><input type="checkbox" id="t-path" checked> path</label>
+      <label><input type="checkbox" id="t-follow" checked> follow</label>
+    </div>
+  </div>
+  <div class="legend">
+    Ring colour: horizontal σ relative to this flight
+    <div class="bar"></div>
+    <div class="ends"><span id="lg-min">-</span><span id="lg-max">-</span></div>
+    Sizes = σ × bound × exaggeration. Yaw cone = ±bound·σ<sub>yaw</sub> (not exaggerated).
+  </div>
+  <h3>Messages</h3>
+  <div class="filters">
+    <span class="chip" data-lvl="err" style="color:var(--err)">errors</span>
+    <span class="chip" data-lvl="warn" style="color:var(--warn)">warnings</span>
+    <span class="chip" data-lvl="info" style="color:var(--info)">info</span>
+  </div>
+  <div id="msgs"></div>
+</aside>
+
+<div id="bottom">
+  <div id="controls">
+    <button id="play" title="Space">▶ Play</button>
+    <select id="speed" title="Playback speed">
+      <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option>
+      <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
+    </select>
+    <button id="prev" title="[">⏮ msg</button><button id="next" title="]">msg ⏭</button>
+    <span class="time" id="c-time">0.00 / 0.00 s</span>
+    <span class="spacer"></span>
+    <span class="hint">Space play · ←/→ 1 s (Shift 5 s) · [ ] prev/next message · F follow</span>
+  </div>
+  <canvas id="tl"></canvas>
+  <div id="chartwrap"><canvas id="chart"></canvas></div>
+</div>
+<div id="tip"></div>
+
+<div id="loader">
+  <div class="box">
+    <h2 style="margin-top:0">PX4 Flight Viewer</h2>
+    <p>Open via the API: <code>/viewer/&lt;flight_id&gt;</code><br>
+       or drop a JSON from <code>python -m app.viz log.ulg -o viz.json</code></p>
+    <input type="file" id="file" accept=".json">
+    <div class="err" id="load-err"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// ------------------------------------------------------------------ helpers
+const $ = (id) => document.getElementById(id);
+const F = (a) => Float64Array.from(a ?? [], (v) => (v == null ? NaN : v));
+const fmt = (v, d = 2, unit = "") => (Number.isFinite(v) ? v.toFixed(d) + unit : "-");
+const LEVEL_CLASS = (l) => ["ERROR", "CRITICAL", "EMERGENCY", "ALERT"].includes(l) ? "err"
+  : l === "WARNING" ? "warn" : "info";
+const LEVEL_COLOR = { err: "#ff4d4f", warn: "#ffa940", info: "#6b8bb8" };
+
+function bsearch(T, t) {           // last i with T[i] <= t
+  let lo = 0, hi = T.length - 1;
+  if (t <= T[0]) return 0;
+  if (t >= T[hi]) return hi;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= t) lo = m; else hi = m; }
+  return lo;
+}
+function interp(T, V, t) {
+  const n = T.length;
+  if (!n) return NaN;
+  if (t <= T[0]) return V[0];
+  if (t >= T[n - 1]) return V[n - 1];
+  const i = bsearch(T, t), a = (t - T[i]) / (T[i + 1] - T[i]);
+  const v0 = V[i], v1 = V[i + 1];
+  if (Number.isNaN(v0)) return v1;
+  if (Number.isNaN(v1)) return v0;
+  return v0 + (v1 - v0) * a;
+}
+function ramp(x) {                 // 0..1 -> green, yellow, red
+  const c0 = new THREE.Color("#2fbf71"), c1 = new THREE.Color("#e6c229"), c2 = new THREE.Color("#ff4d4f");
+  x = Math.min(1, Math.max(0, x));
+  return x < 0.5 ? c0.lerp(c1, x * 2) : c1.lerp(c2, (x - 0.5) * 2);
+}
+// PX4 NED -> three.js (x = East, y = Up, z = -North). Right handed, proper rotation.
+const ned2three = (n, e, d) => new THREE.Vector3(e, -d, -n);
+const Q_NED2THREE = new THREE.Quaternion().setFromRotationMatrix(
+  new THREE.Matrix4().set(0, 1, 0, 0,  0, 0, -1, 0,  -1, 0, 0, 0,  0, 0, 0, 1));
+
+// ------------------------------------------------------------------ loading
+async function boot() {
+  const qs = new URLSearchParams(location.search);
+  const src = qs.get("src") ?? (qs.get("flight") ? `/flights/${qs.get("flight")}/viz` : null);
+  if (src) {
+    try {
+      const r = await fetch(src);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${await r.text()}`);
+      start(await r.json());
+    } catch (e) { $("load-err").textContent = `Failed to load ${src}\n${e.message}`; }
+  }
+  const readFile = (f) => f.text().then((s) => start(JSON.parse(s)))
+    .catch((e) => ($("load-err").textContent = e.message));
+  $("file").onchange = (e) => e.target.files[0] && readFile(e.target.files[0]);
+  const L = $("loader");
+  L.ondragover = (e) => { e.preventDefault(); L.classList.add("drag"); };
+  L.ondragleave = () => L.classList.remove("drag");
+  L.ondrop = (e) => { e.preventDefault(); L.classList.remove("drag"); e.dataTransfer.files[0] && readFile(e.dataTransfer.files[0]); };
+}
+boot();
+
+// ------------------------------------------------------------------ main
+function start(raw) {
+  $("loader").style.display = "none";
+  document.title = `${raw.meta?.filename ?? "flight"} · PX4 Flight Viewer`;
+
+  // ---- data as typed arrays
+  const P = { t: F(raw.pos.t), n: F(raw.pos.n), e: F(raw.pos.e), d: F(raw.pos.d),
+              vn: F(raw.pos.vn), ve: F(raw.pos.ve), vd: F(raw.pos.vd),
+              eph: F(raw.pos.eph), epv: F(raw.pos.epv) };
+  const A = raw.att ? { t: F(raw.att.t), w: F(raw.att.w), x: F(raw.att.x), y: F(raw.att.y), z: F(raw.att.z) } : null;
+  // EKF sigmas; fall back to eph/epv when estimator_states is missing
+  const E = raw.ekf
+    ? { t: F(raw.ekf.t), sn: F(raw.ekf.sn), se: F(raw.ekf.se), sd: F(raw.ekf.sd),
+        syaw: F(raw.ekf.syaw), inst: raw.ekf.instance }
+    : { t: P.t, sn: P.eph.map((v) => v / Math.SQRT2), se: P.eph.map((v) => v / Math.SQRT2),
+        sd: P.epv, syaw: new Float64Array(P.t.length).fill(NaN) };
+  const R = raw.ratios ? { t: F(raw.ratios.t), mag: F(raw.ratios.mag), gps: F(raw.ratios.gps_hpos), baro: F(raw.ratios.baro) } : null;
+  const M = raw.motors ? { t: F(raw.motors.t), u: raw.motors.u.map(F) } : null;
+  const B = raw.batt ? { t: F(raw.batt.t), v: F(raw.batt.v) } : null;
+  const msgs = raw.messages ?? [];
+  const modes = raw.modes ?? [], armed = raw.armed ?? [];
+
+  const tMin = Math.min(P.t[0], 0, ...msgs.map((m) => m.t));
+  const tMax = Math.max(raw.meta?.duration_s ?? 0, P.t[P.t.length - 1]);
+  const groundD = Math.max(...P.d.filter(Number.isFinite));        // lowest point = ground
+  const sH = Array.from(E.t, (_, i) => Math.hypot(E.sn[i], E.se[i]));
+  const sHmin = Math.min(...sH.filter(Number.isFinite)), sHmax = Math.max(...sH.filter(Number.isFinite));
+  $("lg-min").textContent = fmt(sHmin, 3, " m"); $("lg-max").textContent = fmt(sHmax, 3, " m");
+
+  const state = { t: P.t[0], playing: false, speed: 1, sig: 3, exag: 4, msc: 3,
+                  follow: true, filters: { err: true, warn: true, info: true } };
+
+  // ---- three.js scene
+  const view = $("view");
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  view.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color("#0d1117");
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 5000);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x202530, 1.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(30, 60, 20); scene.add(sun);
+
+  // trajectory in three coords
+  const pts = Array.from(P.t, (_, i) => ned2three(P.n[i], P.e[i], P.d[i]));
+  const box = new THREE.Box3().setFromPoints(pts.filter((p) => Number.isFinite(p.x)));
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const groundY = -groundD;
+
+  // ground grid + compass labels
+  const extent = Math.max(20, Math.ceil(Math.max(size.x, size.z) * 1.6 / 10) * 10);
+  const grid = new THREE.GridHelper(extent, extent <= 80 ? extent : extent / 5, 0x3a4658, 0x232b36);
+  grid.position.set(center.x, groundY, center.z); scene.add(grid);
+  function label(text, color = "#8592a3", px = 64) {
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const g = c.getContext("2d"); g.fillStyle = color; g.font = `bold ${px}px system-ui`;
+    g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, 64, 64);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false }));
+    s.scale.setScalar(extent * 0.06); return s;
+  }
+  [["N", 0, -1, "#ff6b6b"], ["E", 1, 0, "#8592a3"], ["S", 0, 1, "#8592a3"], ["W", -1, 0, "#8592a3"]]
+    .forEach(([t, x, z, c]) => { const s = label(t, c); s.position.set(center.x + x * extent * 0.55, groundY + 0.5, center.z + z * extent * 0.55); scene.add(s); });
+  // takeoff marker
+  const home = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: 0x4fa3ff, side: THREE.DoubleSide }));
+  home.rotation.x = -Math.PI / 2; home.position.set(pts[0].x, groundY + 0.01, pts[0].z); scene.add(home);
+
+  // full path (dim), flown path (bright), ground shadow
+  const mkLine = (points, color, opacity = 1) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity }));
+  const pathAll = mkLine(pts, 0x56637a, 0.45);
+  const pathDone = mkLine(pts, 0x4fa3ff);
+  const shadow = mkLine(pts.map((p) => new THREE.Vector3(p.x, groundY + 0.02, p.z)), 0x000000, 0.5);
+  scene.add(pathAll, pathDone, shadow);
+  const dropLine = mkLine([new THREE.Vector3(), new THREE.Vector3()], 0x8592a3, 0.5); scene.add(dropLine);
+
+  // ---- quad model, authored in body FRD coordinates (x fwd, y right, z down)
+  const drone = new THREE.Group(); scene.add(drone);
+  const body = new THREE.Group(); drone.add(body);          // scaled by model scale
+  const matBody = new THREE.MeshStandardMaterial({ color: 0x2b3440, metalness: 0.3, roughness: 0.6 });
+  body.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.05), matBody));
+  const rot = raw.rotors?.length ? raw.rotors : [{ px: 1, py: 1, km: .05 }, { px: -1, py: -1, km: .05 }, { px: 1, py: -1, km: -.05 }, { px: -1, py: 1, km: -.05 }];
+  const rmax = Math.max(...rot.map((r) => Math.hypot(r.px, r.py))) || 1;
+  const ARM = 0.25;                                          // metres at scale 1
+  const props = rot.map((r, i) => {
+    const px = r.px / rmax * ARM, py = r.py / rmax * ARM;
+    const front = px > 0;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(px, py), 0.02, 0.015),
+      new THREE.MeshStandardMaterial({ color: front ? 0xd64545 : 0x9aa5b4 }));
+    arm.position.set(px / 2, py / 2, -0.01); arm.rotation.z = Math.atan2(py, px); body.add(arm);
+    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 16), matBody);
+    motor.rotation.x = Math.PI / 2; motor.position.set(px, py, -0.025); body.add(motor);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.1, 32),
+      new THREE.MeshBasicMaterial({ color: r.km > 0 ? 0x4fa3ff : 0x52c41a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+    disc.position.set(px, py, -0.045); body.add(disc);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.016, 0.004), new THREE.MeshStandardMaterial({ color: 0xdde3ea }));
+    blade.position.set(px, py, -0.046); body.add(blade);
+    return { disc, blade, dir: Math.sign(r.km) || 1, idx: i };
+  });
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 16), new THREE.MeshStandardMaterial({ color: 0xff4d4f }));
+  nose.rotation.z = -Math.PI / 2; nose.position.set(0.12, 0, 0); body.add(nose);
+
+  // ---- uncertainty visuals (world aligned, NOT rotated with the drone)
+  const ell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16),
+    new THREE.MeshBasicMaterial({ color: 0x4fa3ff, transparent: true, opacity: 0.14, depthWrite: false }));
+  const ellWire = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 8)),
+    new THREE.LineBasicMaterial({ color: 0x4fa3ff, transparent: true, opacity: 0.25 }));
+  ell.add(ellWire); scene.add(ell);
+  const circleGeo = new THREE.BufferGeometry().setFromPoints(
+    Array.from({ length: 65 }, (_, i) => { const a = i / 64 * Math.PI * 2; return new THREE.Vector3(Math.cos(a), 0, Math.sin(a)); }));
+  const ringNow = new THREE.Line(circleGeo, new THREE.LineBasicMaterial({ color: 0xffffff })); scene.add(ringNow);
+  // trail of rings, one per EKF sample
+  const rings = Array.from(E.t, (te, i) => {
+    const p = ned2three(interp(P.t, P.n, te), interp(P.t, P.e, te), interp(P.t, P.d, te));
+    const c = ramp((sH[i] - sHmin) / ((sHmax - sHmin) || 1));
+    const l = new THREE.Line(circleGeo, new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.55 }));
+    l.position.copy(p); l.userData = { t: te, i }; scene.add(l); return l;
+  });
+  // yaw uncertainty wedge (triangle fan, rebuilt every frame)
+  const WEDGE_N = 24;
+  const wedgeGeo = new THREE.BufferGeometry();
+  wedgeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(WEDGE_N * 9), 3));
+  const wedge = new THREE.Mesh(wedgeGeo, new THREE.MeshBasicMaterial({ color: 0xffa940, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  scene.add(wedge);
+
+  // ---- camera framing
+  // start close behind/above the drone (follow mode keeps this offset)
+  const camDist = THREE.MathUtils.clamp(size.length() * 0.3, 6, 60);
+  controls.target.copy(pts[0]);
+  camera.position.copy(pts[0]).add(new THREE.Vector3(0.55, 0.45, 0.7).normalize().multiplyScalar(camDist));
+  controls.update();
+
+  function resize() {
+    const w = view.clientWidth, h = view.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+    drawTimeline(); drawChart();
+  }
+
+  // ---- per-frame state at time t
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qNB = new THREE.Quaternion();
+  function sample(t) {
+    const s = { n: interp(P.t, P.n, t), e: interp(P.t, P.e, t), d: interp(P.t, P.d, t),
+      vn: interp(P.t, P.vn, t), ve: interp(P.t, P.ve, t), vd: interp(P.t, P.vd, t),
+      sn: interp(E.t, E.sn, t), se: interp(E.t, E.se, t), sd: interp(E.t, E.sd, t), syaw: interp(E.t, E.syaw, t),
+      mag: R ? interp(R.t, R.mag, t) : NaN, bat: B ? interp(B.t, B.v, t) : NaN,
+      motors: M ? M.u.map((u) => interp(M.t, u, t)) : [] };
+    if (A) {
+      const i = bsearch(A.t, t), j = Math.min(i + 1, A.t.length - 1);
+      qa.set(A.x[i], A.y[i], A.z[i], A.w[i]); qb.set(A.x[j], A.y[j], A.z[j], A.w[j]);
+      const a = j > i ? Math.min(1, Math.max(0, (t - A.t[i]) / (A.t[j] - A.t[i]))) : 0;
+      qNB.slerpQuaternions(qa, qb, a);
+    } else qNB.identity();
+    const { w, x, y, z } = qNB;                                // yaw in NED, 0 = north, + = east
+    s.yaw = Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
+    s.mode = modes.find((m) => t >= m.t0 && t < m.t1)?.value ?? (modes.at(-1)?.value ?? "-");
+    s.armed = armed.some((a) => t >= a.t0 && t < a.t1);
+    return s;
+  }
+
+  const motorBars = $("motors");
+  motorBars.innerHTML = rot.map(() => "<div></div>").join("");
+
+  let last = sample(state.t);
+  function applyTime(dtReal = 0) {
+    const s = last = sample(state.t);
+    const p = ned2three(s.n, s.e, s.d);
+    // drone pose
+    drone.position.copy(p);
+    drone.quaternion.copy(Q_NED2THREE).multiply(qNB);
+    body.scale.setScalar(state.msc);
+    props.forEach((pr) => {
+      const u = s.motors[pr.idx] ?? 0;
+      pr.blade.rotation.z += pr.dir * (0.2 + u * 2.5) * (state.playing ? 1 : 0) * Math.min(dtReal * 60, 3);
+      pr.disc.material.opacity = 0.1 + 0.5 * (Number.isFinite(u) ? u : 0);
+    });
+    // flown path
+    pathDone.geometry.setDrawRange(0, bsearch(P.t, state.t) + 1);
+    const dl = dropLine.geometry.attributes.position;
+    dl.setXYZ(0, p.x, p.y, p.z); dl.setXYZ(1, p.x, groundY, p.z); dl.needsUpdate = true;
+    // uncertainty
+    const k = state.sig * state.exag;
+    ell.position.copy(p); ell.scale.set(s.se * k, s.sd * k, s.sn * k);
+    ringNow.position.copy(p); ringNow.scale.set(s.se * k, 1, s.sn * k);
+    rings.forEach((r) => {
+      r.visible = $("t-rings").checked && r.userData.t <= state.t;
+      const i = r.userData.i; r.scale.set(E.se[i] * k, 1, E.sn[i] * k);
+    });
+    // yaw wedge: ±bound·σ_yaw around heading, radius tied to model size
+    const half = THREE.MathUtils.degToRad(state.sig * (Number.isFinite(s.syaw) ? s.syaw : 0));
+    const rad = ARM * state.msc * 3, pos = wedgeGeo.attributes.position;
+    for (let i = 0; i < WEDGE_N; i++) {
+      const a0 = s.yaw - half + (2 * half) * i / WEDGE_N, a1 = s.yaw - half + (2 * half) * (i + 1) / WEDGE_N;
+      pos.setXYZ(i * 3, p.x, p.y, p.z);
+      pos.setXYZ(i * 3 + 1, p.x + rad * Math.sin(a0), p.y, p.z - rad * Math.cos(a0));
+      pos.setXYZ(i * 3 + 2, p.x + rad * Math.sin(a1), p.y, p.z - rad * Math.cos(a1));
+    }
+    pos.needsUpdate = true; wedgeGeo.computeBoundingSphere();
+    ell.visible = ringNow.visible = $("t-ell").checked;
+    wedge.visible = $("t-yaw").checked && Number.isFinite(s.syaw);
+    pathAll.visible = pathDone.visible = shadow.visible = $("t-path").checked;
+    // follow camera: move target and camera by the same delta
+    if (state.follow) {
+      const delta = p.clone().sub(controls.target);
+      controls.target.add(delta); camera.position.add(delta);
+    }
+    updateHud(s); updateMsgList(); drawTimeline(); drawChart();
+  }
+
+  function updateHud(s) {
+    $("h-time").textContent = `${state.t.toFixed(2)} s`;
+    $("c-time").textContent = `${state.t.toFixed(2)} / ${tMax.toFixed(2)} s`;
+    $("h-mode").textContent = s.mode;
+    $("h-armed").innerHTML = s.armed ? '<span style="color:var(--ok)">ARMED</span>' : "disarmed";
+    $("h-alt").textContent = fmt(groundD - s.d, 1, " m");
+    $("h-hs").textContent = fmt(Math.hypot(s.vn, s.ve), 1, " m/s");
+    $("h-vs").textContent = fmt(-s.vd, 1, " m/s");
+    $("h-spos").textContent = `${fmt(s.sn, 2)} / ${fmt(s.se, 2)} / ${fmt(s.sd, 2)} m`;
+    $("h-syaw").textContent = fmt(s.syaw, 2, "°");
+    const mag = $("h-mag"); mag.textContent = fmt(s.mag, 2);
+    mag.className = s.mag > 1 ? "bad" : s.mag > 0.5 ? "warn" : "";
+    $("h-bat").textContent = fmt(s.bat, 2, " V");
+    [...motorBars.children].forEach((d, i) => (d.style.height = `${Math.max(2, (s.motors[i] ?? 0) * 100)}%`));
+  }
+
+  // ---- message list
+  const msgEls = msgs.map((m) => {
+    const el = document.createElement("div");
+    el.className = `msg ${m.level}`;
+    el.innerHTML = `<span class="t">${m.t.toFixed(2)}</span><span></span>`;
+    el.lastChild.textContent = m.text;
+    el.onclick = () => seek(m.t - 1);
+    $("msgs").appendChild(el); return el;
+  });
+  let lastCurrent = -1;
+  function updateMsgList() {
+    let cur = -1;
+    msgs.forEach((m, i) => {
+      const vis = state.filters[LEVEL_CLASS(m.level)];
+      msgEls[i].style.display = vis ? "" : "none";
+      msgEls[i].classList.toggle("future", m.t > state.t);
+      if (vis && m.t <= state.t) cur = i;
+    });
+    if (cur !== lastCurrent) {
+      msgEls[lastCurrent]?.classList.remove("current");
+      if (cur >= 0) { msgEls[cur].classList.add("current"); msgEls[cur].scrollIntoView({ block: "nearest" }); }
+      lastCurrent = cur;
+    }
+  }
+  document.querySelectorAll(".chip").forEach((c) => c.onclick = () => {
+    state.filters[c.dataset.lvl] = !state.filters[c.dataset.lvl];
+    c.classList.toggle("off", !state.filters[c.dataset.lvl]); applyTime();
+  });
+
+  // ---- timeline + chart (2D canvas, shared time axis)
+  const tl = $("tl"), ch = $("chart"), tip = $("tip");
+  const PAD_L = 92, PAD_R = 16;
+  const xOf = (t, w) => PAD_L + (t - tMin) / (tMax - tMin) * (w - PAD_L - PAD_R);
+  const tOf = (x, w) => tMin + (x - PAD_L) / (w - PAD_L - PAD_R) * (tMax - tMin);
+  function fitCanvas(c) {
+    const r = c.getBoundingClientRect(), dpr = devicePixelRatio;
+    if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) {
+      c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+    }
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [g, r.width, r.height];
+  }
+  const modeColor = (name) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 45% 35%)`; };
+  const visMsgs = () => msgs.filter((m) => state.filters[LEVEL_CLASS(m.level)]);
+
+  function drawTimeline() {
+    const [g, w, h] = fitCanvas(tl);
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = "#8592a3"; g.font = "11px system-ui"; g.textBaseline = "middle";
+    g.fillText("mode", 10, 9); g.fillText("armed", 10, 22); g.fillText("messages", 10, 36);
+    modes.forEach((m) => {                       // mode bands
+      const x0 = xOf(m.t0, w), x1 = xOf(m.t1, w);
+      g.fillStyle = modeColor(m.value); g.fillRect(x0, 2, x1 - x0, 14);
+      g.fillStyle = "#e8edf3"; g.save(); g.beginPath(); g.rect(x0, 2, x1 - x0, 14); g.clip();
+      g.fillText(m.value, x0 + 4, 9); g.restore();
+    });
+    armed.forEach((a) => { g.fillStyle = "#52c41a"; g.fillRect(xOf(a.t0, w), 19, xOf(a.t1, w) - xOf(a.t0, w), 6); });
+    g.fillStyle = "#1c2430"; g.fillRect(PAD_L, 28, w - PAD_L - PAD_R, h - 30);
+    for (const lvl of ["info", "warn", "err"])  // draw errors last so they stay on top
+      visMsgs().filter((m) => LEVEL_CLASS(m.level) === lvl).forEach((m) => {
+        g.fillStyle = LEVEL_COLOR[lvl];
+        const x = xOf(m.t, w), top = lvl === "info" ? 36 : 29;
+        g.fillRect(x - 1, top, lvl === "info" ? 2 : 3, h - top - 2);
+      });
+    drawAxisAndHead(g, w, h, false);
+  }
+
+  const lanes = [
+    { name: "σ pos [m]", series: [{ T: E.t, V: Float64Array.from(sH), c: "#4fa3ff", lbl: "σ_h" }, { T: E.t, V: E.sd, c: "#b37feb", lbl: "σ_v" }] },
+    { name: "σ yaw [°]", series: [{ T: E.t, V: E.syaw, c: "#ffa940", lbl: "σ_yaw" }] },
+    { name: "test ratio", ref: 1, series: R ? [{ T: R.t, V: R.mag, c: "#ff4d4f", lbl: "mag" }, { T: R.t, V: R.gps, c: "#52c41a", lbl: "gps" }, { T: R.t, V: R.baro, c: "#8592a3", lbl: "baro" }] : [], clip: 3 },
+  ];
+  lanes.forEach((L) => {
+    const all = L.series.flatMap((s) => Array.from(s.V).filter(Number.isFinite));
+    L.max = Math.min(L.clip ?? Infinity, Math.max(...all, L.ref ?? 0) * 1.1) || 1;
+    L.min = L.clip ? 0 : Math.min(...all) * 0.9;
+  });
+  function drawChart() {
+    const [g, w, h] = fitCanvas(ch);
+    g.clearRect(0, 0, w, h);
+    const lh = (h - 16) / lanes.length;
+    lanes.forEach((L, li) => {
+      const y0 = li * lh + 2, y1 = y0 + lh - 4;
+      const yOf = (v) => y1 - (Math.min(v, L.max) - L.min) / (L.max - L.min) * (y1 - y0);
+      g.fillStyle = "#1c2430"; g.fillRect(PAD_L, y0, w - PAD_L - PAD_R, y1 - y0);
+      g.fillStyle = "#8592a3"; g.font = "11px system-ui"; g.textBaseline = "top";
+      g.fillText(L.name, 10, y0 + 2);
+      if (L.ref != null) {                     // rejection threshold
+        g.strokeStyle = "#ff4d4f88"; g.setLineDash([4, 4]); g.beginPath();
+        g.moveTo(PAD_L, yOf(L.ref)); g.lineTo(w - PAD_R, yOf(L.ref)); g.stroke(); g.setLineDash([]);
+      }
+      L.series.forEach((s, si) => {
+        g.strokeStyle = s.c; g.lineWidth = 1.5; g.beginPath(); let pen = false;
+        for (let i = 0; i < s.T.length; i++) {
+          const v = s.V[i]; if (!Number.isFinite(v)) { pen = false; continue; }
+          const x = xOf(s.T[i], w), y = yOf(v);
+          pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true;
+        }
+        g.stroke();
+        const cur = interp(s.T, s.V, state.t);
+        g.fillStyle = s.c; g.fillText(`${s.lbl} ${fmt(cur, L.name.includes("ratio") ? 2 : 3)}`, 10, y0 + 15 + si * 12);
+      });
+    });
+    // faint message markers across all lanes
+    visMsgs().forEach((m) => {
+      const lvl = LEVEL_CLASS(m.level); if (lvl === "info") return;
+      g.fillStyle = LEVEL_COLOR[lvl] + "55"; g.fillRect(xOf(m.t, w) - 0.5, 0, 1, h - 16);
+    });
+    drawAxisAndHead(g, w, h, true);
+  }
+  function drawAxisAndHead(g, w, h, ticks) {
+    if (ticks) {
+      g.fillStyle = "#8592a3"; g.font = "10px system-ui"; g.textBaseline = "bottom";
+      const step = [1, 2, 5, 10, 20, 30, 60, 120, 300].find((s) => (tMax - tMin) / s <= 14) ?? 600;
+      for (let t = Math.ceil(tMin / step) * step; t <= tMax; t += step) g.fillText(`${t}s`, xOf(t, w) - 6, h - 1);
+    }
+    const x = xOf(state.t, w);
+    g.fillStyle = "#ffffff"; g.fillRect(x - 1, 0, 2, ticks ? h - 14 : h);
+  }
+
+  // scrubbing + hover tooltips
+  function bindScrub(c, isTl) {
+    let drag = false;
+    const toT = (e) => tOf(e.clientX - c.getBoundingClientRect().left, c.getBoundingClientRect().width);
+    c.onpointerdown = (e) => { drag = true; c.setPointerCapture(e.pointerId); seek(toT(e)); };
+    c.onpointerup = () => (drag = false);
+    c.onpointermove = (e) => {
+      if (drag) seek(toT(e));
+      const r = c.getBoundingClientRect(), x = e.clientX - r.left;
+      const near = visMsgs().map((m) => ({ m, d: Math.abs(xOf(m.t, r.width) - x) }))
+        .filter((o) => o.d < 5).sort((a, b) => LEVEL_CLASS(a.m.level).localeCompare(LEVEL_CLASS(b.m.level)) || a.d - b.d);
+      if (near.length && x > PAD_L) {
+        tip.style.display = "block"; tip.style.left = `${e.clientX + 12}px`; tip.style.top = `${e.clientY - 40}px`;
+        tip.innerHTML = near.slice(0, 4).map(({ m }) =>
+          `<div><b style="color:${LEVEL_COLOR[LEVEL_CLASS(m.level)]}">${m.t.toFixed(2)}s ${m.level}</b> ${m.text.replace(/</g, "&lt;")}</div>`).join("");
+      } else if (x > PAD_L) {
+        tip.style.display = "block"; tip.style.left = `${e.clientX + 12}px`; tip.style.top = `${e.clientY - 30}px`;
+        tip.textContent = `${toT(e).toFixed(2)} s`;
+      } else tip.style.display = "none";
+    };
+    c.onpointerleave = () => (tip.style.display = "none");
+  }
+  bindScrub(tl, true); bindScrub(ch, false);
+
+  // ---- controls
+  function seek(t) { state.t = Math.min(tMax, Math.max(tMin, t)); applyTime(); }
+  function setPlaying(p) {
+    if (p && state.t >= tMax) state.t = tMin;
+    state.playing = p; $("play").textContent = p ? "⏸ Pause" : "▶ Play";
+  }
+  const jumpMsg = (dir) => {
+    const list = visMsgs().map((m) => m.t);
+    const t = dir > 0 ? list.find((x) => x > state.t + 0.01) : list.reverse().find((x) => x < state.t - 0.01);
+    if (t != null) seek(t);
+  };
+  $("play").onclick = () => setPlaying(!state.playing);
+  $("speed").onchange = (e) => (state.speed = +e.target.value);
+  $("prev").onclick = () => jumpMsg(-1); $("next").onclick = () => jumpMsg(1);
+  $("sig").onchange = (e) => { state.sig = +e.target.value; applyTime(); };
+  $("exag").oninput = (e) => { state.exag = +e.target.value; $("exag-v").textContent = `×${state.exag}`; applyTime(); };
+  $("msc").oninput = (e) => { state.msc = +e.target.value; $("msc-v").textContent = `×${state.msc}`; applyTime(); };
+  ["t-ell", "t-rings", "t-yaw", "t-path"].forEach((id) => ($(id).onchange = () => applyTime()));
+  $("t-follow").onchange = (e) => { state.follow = e.target.checked; applyTime(); };
+  addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    const step = e.shiftKey ? 5 : 1;
+    if (e.code === "Space") { e.preventDefault(); setPlaying(!state.playing); }
+    else if (e.key === "ArrowRight") seek(state.t + step);
+    else if (e.key === "ArrowLeft") seek(state.t - step);
+    else if (e.key === "]") jumpMsg(1);
+    else if (e.key === "[") jumpMsg(-1);
+    else if (e.key.toLowerCase() === "f") { state.follow = !state.follow; $("t-follow").checked = state.follow; }
+  });
+  addEventListener("resize", resize);
+
+  // ---- render loop
+  let prev = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    if (state.playing) {
+      state.t += dt * state.speed;
+      if (state.t >= tMax) { state.t = tMax; setPlaying(false); }
+      applyTime(dt);
+    }
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  resize(); applyTime(); requestAnimationFrame(frame);
+
+  // handle for tests / console poking
+  window.viewer = { state, seek, setPlaying, sample: () => last, camera, controls, drone, scene };
+}
+</script>
+</body>
+</html>
