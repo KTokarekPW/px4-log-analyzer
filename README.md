@@ -42,7 +42,7 @@ The likely causes are a bad calibration or a static magnet near the compass. EMI
 
 ## Quick start
 
-Requires Python 3.10+. On Windows use WSL and **keep the project in the Linux filesystem** (`~/...`, not `/mnt/c/...`), or `pip install` and SQLite will be painfully slow.
+Requires Python 3.10+. On Windows use WSL, it's surprisingly good and efficient nowadays.
 
 ```bash
 git clone https://github.com/KTokarekPW/px4-log-analyzer.git
