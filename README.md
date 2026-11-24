@@ -2,7 +2,7 @@
 
 A handmade tool for analysing flight logs (`.ulg`) from PX4 drones: a 3D replay of the flight with the EKF2 state estimate, its uncertainty, and every estimator flag laid out on a single timeline.
 
-![Viewer](viewer.png)
+![Viewer](docs/viewer.gif)
 
 ## Why?
 
